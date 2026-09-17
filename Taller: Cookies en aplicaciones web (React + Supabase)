@@ -1,0 +1,472 @@
+Parte 1 — Investigación teórica
+1. ¿Qué es una cookie?
+
+Una cookie es un pequeño dato que un sitio web guarda en el navegador. Normalmente está formada por un nombre y un valor, por ejemplo usuario=Ronald. El navegador puede enviar esa información automáticamente al servidor en futuras peticiones cuando se cumplen las condiciones de la cookie.
+
+Las cookies se diferencian de localStorage y sessionStorage principalmente en la forma en que se utilizan y en cuánto tiempo permanecen almacenadas.
+
+Característica	Cookie	localStorage	sessionStorage
+¿Se envía automáticamente al servidor?	Sí, cuando corresponde al dominio, ruta y demás reglas.	No, JavaScript debe enviarlo manualmente.	No, JavaScript debe enviarlo manualmente.
+¿Sobrevive a cerrar el navegador?	Sí, si tiene una duración configurada. Una cookie de sesión normalmente no.	Sí.	No, normalmente desaparece al cerrar la pestaña.
+¿Tiene expiración configurable?	Sí, mediante Expires o Max-Age.	No tiene una fecha de expiración propia.	No tiene una fecha de expiración propia.
+¿Tamaño máximo aproximado?	Aproximadamente 4 KB por cookie.	Aproximadamente varios MB por origen, dependiendo del navegador.	Aproximadamente varios MB por origen, dependiendo del navegador.
+¿Accesible desde JavaScript?	Sí, excepto si tiene HttpOnly.	Sí.	Sí.
+
+HTTP es "sin estado" porque cada petición se procesa de forma independiente. El servidor no recuerda automáticamente qué ocurrió en las peticiones anteriores.
+
+Por ejemplo, cuando un usuario inicia sesión, una petición posterior no tendría por sí sola la información necesaria para saber que pertenece al mismo usuario. Las cookies ayudan a solucionar este problema porque permiten guardar un identificador y enviarlo nuevamente al servidor en las siguientes peticiones.
+
+2. ¿Cómo se crea una cookie?
+
+El servidor utiliza el encabezado HTTP Set-Cookie para pedirle al navegador que guarde una cookie.
+
+Ejemplo:
+
+Set-Cookie: usuario=Ronald; Path=/; Secure; HttpOnly; SameSite=Lax
+
+Cuando el navegador realiza posteriormente una petición que corresponde a esa cookie, utiliza el encabezado Cookie:
+
+Cookie: usuario=Ronald
+Crear una cookie desde JavaScript
+
+Una cookie también puede crearse desde JavaScript utilizando document.cookie.
+
+Ejemplo:
+
+document.cookie = "usuario=Ronald; Max-Age=3600; Path=/; SameSite=Lax";
+
+Para consultar las cookies que JavaScript puede leer:
+
+console.log(document.cookie);
+
+Esta API es un poco incómoda porque document.cookie devuelve las cookies como una cadena de texto. Si existen varias cookies, es necesario separarlas y procesarlas para obtener cada nombre y valor.
+
+Además, una cookie que tenga el atributo HttpOnly no puede ser leída mediante document.cookie.
+
+Diferencia entre una cookie creada por el servidor y una creada por JavaScript
+
+Una cookie creada por el servidor se establece mediante el encabezado Set-Cookie de una respuesta HTTP.
+
+Una cookie creada desde JavaScript se establece mediante document.cookie.
+
+La diferencia de seguridad más importante es que una cookie establecida por el servidor puede tener HttpOnly, mientras que JavaScript no puede crear una cookie HttpOnly mediante document.cookie.
+
+3. Atributos de una cookie
+Expires y Max-Age
+
+Expires indica una fecha y hora concreta en la que la cookie deja de ser válida.
+
+Max-Age indica durante cuántos segundos debe permanecer válida.
+
+Ejemplo:
+
+Set-Cookie: sesion=abc123; Expires=Wed, 30 Sep 2026 23:59:59 GMT; Max-Age=1209600; Path=/; Secure; HttpOnly; SameSite=Lax
+
+Si se utilizan ambos atributos, Max-Age tiene prioridad sobre Expires.
+
+Cuando no se especifica ninguno de los dos, normalmente se obtiene una cookie de sesión. Esta cookie se mantiene mientras dure la sesión del navegador y normalmente desaparece cuando termina.
+
+Domain y Path
+
+Domain indica para qué dominio puede enviarse la cookie.
+
+Si no se coloca Domain, la cookie queda asociada al host que la creó. Esto se conoce como una cookie de host.
+
+Ejemplo:
+
+Set-Cookie: usuario=Ronald; Path=/
+
+Si se establece explícitamente:
+
+Set-Cookie: usuario=Ronald; Domain=ejemplo.com; Path=/
+
+la cookie puede estar disponible para el dominio indicado y, según las reglas del navegador, sus subdominios.
+
+Path indica en qué rutas del sitio puede enviarse la cookie.
+
+Por ejemplo:
+
+Set-Cookie: usuario=Ronald; Path=/cuenta
+
+permite que se envíe en rutas como /cuenta y otras rutas que comiencen por /cuenta.
+
+Si no se indica Path, el navegador utiliza una ruta predeterminada basada en la ubicación desde donde se estableció la cookie.
+
+Secure
+
+El atributo Secure indica que la cookie solamente debe enviarse mediante conexiones HTTPS.
+
+Ejemplo:
+
+Set-Cookie: sesion=abc123; Secure
+
+Esto protege la cookie para que no sea enviada normalmente mediante una conexión HTTP sin cifrado.
+
+Si se intenta utilizar una cookie Secure en un sitio HTTP normal, el navegador no la tratará como una cookie que pueda establecerse y utilizarse de la misma manera que en HTTPS. localhost tiene algunas excepciones especiales durante el desarrollo.
+
+HttpOnly
+
+HttpOnly impide que JavaScript acceda directamente a una cookie mediante document.cookie.
+
+Ejemplo:
+
+Set-Cookie: sesion=abc123; HttpOnly; Secure
+
+Este atributo es importante para reducir el riesgo de robo directo de cookies mediante XSS.
+
+Si un código malicioso intenta:
+
+console.log(document.cookie);
+
+no podrá obtener las cookies que tengan HttpOnly.
+
+Sin embargo, HttpOnly no elimina completamente el peligro de XSS. Un script malicioso todavía podría intentar realizar acciones dentro de la página utilizando la sesión del usuario, aunque no pueda leer directamente la cookie.
+
+SameSite
+
+SameSite controla cuándo una cookie puede enviarse en solicitudes realizadas desde otros sitios.
+
+SameSite=Strict
+
+Es la opción más restrictiva.
+
+Ejemplo:
+
+Set-Cookie: sesion=abc123; SameSite=Strict; Secure; HttpOnly
+
+Si una persona está en otro-sitio.com y pulsa un enlace que la lleva a mi-sitio.com, la cookie con SameSite=Strict puede no enviarse en esa navegación inicial entre sitios.
+
+También restringe el envío de la cookie en situaciones como cuando el sitio se carga dentro de un <iframe> de otro sitio.
+
+SameSite=Lax
+
+Es menos restrictiva que Strict.
+
+Ejemplo:
+
+Set-Cookie: sesion=abc123; SameSite=Lax; Secure; HttpOnly
+
+Permite determinadas navegaciones principales desde otros sitios, especialmente algunas navegaciones GET de nivel superior.
+
+Sin embargo, restringe muchas solicitudes cross-site, como determinadas peticiones POST iniciadas desde otra página.
+
+Por eso Lax puede ayudar a reducir el riesgo de CSRF.
+
+SameSite=None
+
+Permite que una cookie pueda enviarse también en contextos cross-site.
+
+Ejemplo:
+
+Set-Cookie: servicio=abc123; SameSite=None; Secure
+
+Cuando se utiliza SameSite=None, el navegador exige también el atributo Secure.
+
+Este tipo de cookie puede ser necesario en determinados servicios que necesitan funcionar dentro de un contexto de terceros, como algunos contenidos embebidos.
+
+Partitioned (CHIPS)
+
+Partitioned permite utilizar cookies en contextos de terceros manteniendo el almacenamiento separado según el sitio principal que las utiliza.
+
+Por ejemplo, un mismo servicio externo podría aparecer en dos sitios diferentes:
+
+paginaA.com
+paginaB.com
+
+Una cookie particionada puede tener un almacenamiento diferente en cada uno de esos contextos.
+
+El objetivo es permitir algunos usos legítimos de servicios de terceros sin proporcionar el mismo mecanismo de seguimiento entre diferentes sitios.
+
+Ejemplo:
+
+Set-Cookie: servicio=123; SameSite=None; Secure; Partitioned
+4. Cookies de primera parte vs. terceros
+
+Una cookie de primera parte o first-party es una cookie asociada al sitio que el usuario está visitando.
+
+Por ejemplo, si una persona está visitando:
+
+tienda.com
+
+y ese mismo sitio crea una cookie para recordar la sesión del usuario, se trata de una cookie de primera parte.
+
+Una cookie de terceros o third-party pertenece a un dominio diferente al sitio principal que el usuario está visitando.
+
+Por ejemplo, una página puede incluir contenido de un servicio externo y ese servicio puede intentar utilizar cookies dentro de ese contexto.
+
+Los navegadores han aplicado cada vez más restricciones a las cookies de terceros porque pueden utilizarse para reconocer un mismo navegador en diferentes sitios y facilitar el seguimiento de la actividad de navegación.
+
+Safari y Firefox aplican restricciones importantes a este tipo de seguimiento. Chrome también ha aumentado las restricciones y los controles relacionados con las cookies de terceros.
+
+Un uso legítimo de una cookie de terceros puede estar relacionado con un servicio externo integrado en una página, por ejemplo un contenido multimedia o un componente que necesita mantener determinada información de su propio servicio.
+
+Un uso relacionado con publicidad puede ser una empresa que utiliza cookies para reconocer un navegador en diferentes sitios y utilizar esa información para crear perfiles destinados a publicidad personalizada.
+
+5. Sesiones y autenticación
+
+Una sesión del lado del servidor consiste en que el servidor mantiene información relacionada con el usuario mientras este está autenticado.
+
+Por ejemplo:
+
+Navegador
+    |
+    | Cookie: session_id=8472
+    |
+Servidor
+    |
+    | Sesión 8472 → Usuario Ronald
+
+En este caso la cookie normalmente no contiene todos los datos del usuario. Puede contener únicamente un identificador de sesión que permite al servidor encontrar los datos correspondientes.
+
+Autenticación mediante sesión y cookie
+
+El funcionamiento puede representarse así:
+
+Cookie
+   ↓
+ID de sesión
+   ↓
+Servidor
+   ↓
+Información de la sesión
+Autenticación mediante JWT
+
+Con JWT, el token contiene información y una firma que el servidor puede verificar.
+
+JWT
+   ↓
+Información + firma
+   ↓
+Servidor verifica el token
+
+Un JWT puede guardarse en diferentes lugares dependiendo de la arquitectura:
+
+Cookie.
+localStorage.
+Memoria de la aplicación.
+Riesgo de guardar un JWT en localStorage
+
+Uno de los principales problemas de localStorage es que JavaScript puede acceder a su contenido.
+
+Por ejemplo:
+
+const token = localStorage.getItem("token");
+console.log(token);
+
+Si una aplicación tiene una vulnerabilidad XSS, un script malicioso podría intentar obtener ese token.
+
+Cuando el JWT se guarda en una cookie HttpOnly, JavaScript no puede leer directamente esa cookie mediante document.cookie.
+
+Riesgo de CSRF con cookies
+
+Las cookies tienen una característica importante: el navegador puede enviarlas automáticamente en determinadas peticiones.
+
+Por esta razón, una aplicación que utilice cookies para autenticación debe protegerse contra CSRF.
+
+En cambio, un token guardado en localStorage no se envía automáticamente. La aplicación debe obtenerlo mediante JavaScript y colocarlo manualmente en la petición.
+
+Ejemplo:
+
+fetch("/api/perfil", {
+  headers: {
+    Authorization: `Bearer ${token}`
+  }
+});
+Refresh token
+
+Un refresh token es una credencial que permite solicitar un nuevo access token cuando el anterior ha expirado.
+
+Su función puede representarse así:
+
+Refresh token
+      ↓
+Nuevo access token
+      ↓
+Acceso a la API
+
+Como puede permitir obtener nuevos tokens, normalmente se busca protegerlo más que a un token de acceso común.
+
+6. Seguridad: los dos ataques clásicos
+XSS — Cross-Site Scripting
+
+XSS ocurre cuando una aplicación permite que código JavaScript controlado por un atacante se ejecute dentro del contexto de una página.
+
+Si una cookie no tiene HttpOnly, un script malicioso podría intentar leerla mediante:
+
+document.cookie
+
+Si la cookie contiene un identificador de sesión y el atacante consigue obtenerlo, podría intentar utilizarlo para hacerse pasar por el usuario.
+
+El atributo HttpOnly evita específicamente que JavaScript pueda leer esa cookie mediante document.cookie.
+
+Por ejemplo:
+
+Set-Cookie: sesion=abc123; HttpOnly; Secure
+CSRF — Cross-Site Request Forgery
+
+Un ejemplo de un ataque CSRF sería:
+
+El usuario inicia sesión en un sitio web.
+El servidor guarda una sesión y entrega una cookie al navegador.
+El usuario mantiene abierta su sesión.
+El usuario visita posteriormente otro sitio malicioso.
+Ese sitio intenta provocar una petición hacia el sitio donde la víctima tiene la sesión.
+Si el navegador envía automáticamente la cookie y el servidor no tiene suficientes medidas de protección, la petición podría ser interpretada como realizada por el usuario.
+La acción podría ejecutarse sin que el usuario la haya solicitado intencionalmente.
+
+SameSite=Lax y SameSite=Strict ayudan a reducir este riesgo porque restringen cuándo se envían las cookies en solicitudes realizadas desde otros sitios.
+
+Sin embargo, SameSite no debería considerarse la única protección. Las aplicaciones también pueden utilizar CSRF tokens, que son valores adicionales que el servidor verifica antes de aceptar determinadas acciones.
+
+7. Cookies y privacidad / normativa
+
+El RGPD o GDPR europeo establece reglas para el tratamiento de datos personales. En términos generales, cuando las cookies se utilizan para finalidades que no son estrictamente necesarias, como determinadas formas de analítica o publicidad, normalmente se necesita obtener consentimiento válido cuando esa sea la base legal aplicable.
+
+Las cookies estrictamente necesarias son aquellas que se necesitan para proporcionar una función solicitada por el usuario o para que el sitio pueda funcionar correctamente.
+
+Por ejemplo, una cookie necesaria para mantener una sesión iniciada puede ser considerada estrictamente necesaria dependiendo del contexto.
+
+Las cookies de analítica y marketing generalmente requieren un tratamiento más cuidadoso y, cuando corresponda, consentimiento previo.
+
+En Colombia, la Ley 1581 de 2012 establece reglas para el tratamiento de datos personales. El uso de cookies puede implicar tratamiento de datos personales cuando permite recolectar o tratar información relacionada con personas.
+
+Por esto, los sitios deben informar adecuadamente sobre el tratamiento de los datos y cumplir las obligaciones aplicables.
+
+Banner o gestor de consentimiento
+
+Un gestor de consentimiento de cookies es una herramienta o ventana que informa al usuario sobre las categorías de cookies utilizadas y permite controlar cuáles acepta.
+
+Como mínimo debería permitir:
+
+Informar qué tipos de cookies utiliza la página.
+Explicar para qué se utiliza cada categoría.
+Aceptar las categorías correspondientes.
+Rechazar las cookies que no sean necesarias.
+Cambiar posteriormente la decisión.
+Evitar que las cookies que requieren consentimiento se activen antes de obtenerlo.
+8. Cookies en el mundo real: Supabase
+
+Supabase Auth utiliza almacenamiento en el navegador para mantener la sesión cuando se utiliza directamente desde una aplicación web. En una SPA de React sin SSR, el cliente de Supabase utiliza localStorage como mecanismo predeterminado para persistir la sesión.
+
+Supabase también proporciona el paquete:
+
+@supabase/ssr
+
+Este paquete está pensado para aplicaciones que utilizan renderizado del lado del servidor, como aplicaciones basadas en Next.js.
+
+La diferencia puede representarse así:
+
+SPA React
+    ↓
+Supabase Auth
+    ↓
+localStorage
+
+Mientras que en una aplicación con SSR:
+
+Navegador
+    ↓
+Cookies
+    ↓
+Servidor / SSR
+    ↓
+Supabase
+
+En una SPA pura de React normalmente no existe un servidor propio que necesite leer la cookie antes de generar una página. Por eso es común que Supabase gestione la sesión directamente desde el navegador mediante localStorage.
+
+CORS y GitHub Pages
+
+Cuando una aplicación alojada en GitHub Pages realiza peticiones a otro dominio, el servidor debe permitir el origen correspondiente mediante CORS.
+
+Por ejemplo:
+
+Access-Control-Allow-Origin: https://usuario.github.io
+
+Esto indica que ese origen está autorizado para realizar determinadas peticiones.
+
+Si se utilizan credenciales, no se debe combinar:
+
+Access-Control-Allow-Origin: *
+
+con credenciales, porque CORS no permite esa combinación.
+
+En funciones o APIs relacionadas con Supabase también se debe configurar correctamente CORS, incluyendo las solicitudes OPTIONS cuando el navegador realice un preflight.
+
+9. Herramientas del navegador
+Chrome DevTools
+
+En Chrome las cookies se pueden revisar desde:
+
+DevTools
+→ Application
+→ Storage
+→ Cookies
+→ seleccionar el dominio
+
+También pueden observarse las cookies relacionadas con una petición desde:
+
+DevTools
+→ Network
+→ seleccionar una petición
+→ Cookies
+
+La tabla de cookies puede mostrar información como:
+
+Columna	Información
+Name	Nombre de la cookie.
+Value	Valor almacenado.
+Domain	Dominio asociado a la cookie.
+Path	Ruta en la que puede enviarse.
+Expires / Max-Age	Fecha o duración de la cookie.
+Size	Tamaño aproximado de la cookie.
+HttpOnly	Indica si JavaScript no puede acceder a ella.
+Secure	Indica si se limita a conexiones seguras.
+SameSite	Regla para solicitudes entre sitios.
+Partition Key	Información relacionada con cookies particionadas cuando corresponde.
+Firefox DevTools
+
+En Firefox las cookies se pueden encontrar desde:
+
+DevTools
+→ Storage
+→ Cookies
+→ seleccionar el dominio
+
+La tabla puede mostrar columnas como:
+
+Name
+Value
+Domain
+Path
+Expires / Max-Age
+Size
+HttpOnly
+Secure
+SameSite
+Last accessed
+Created
+¿Cómo borrar una cookie específica?
+
+En Chrome:
+
+DevTools
+→ Application
+→ Storage
+→ Cookies
+→ seleccionar el dominio
+→ seleccionar la cookie
+→ eliminarla
+
+También se puede utilizar JavaScript para eliminar una cookie cuando se conocen su nombre y ruta:
+
+document.cookie = "taller_cookie=; Max-Age=0; Path=/";
+
+En Firefox se puede hacer desde:
+
+DevTools
+→ Storage
+→ Cookies
+→ seleccionar la cookie
+→ eliminarla
+
+De esta forma se elimina solamente la cookie seleccionada sin tener que borrar todos los datos almacenados por el sitio.
